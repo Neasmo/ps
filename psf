@@ -1,0 +1,91 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Nettoyage de sessions"
+$form.ClientSize = New-Object System.Drawing.Size(400, 340)
+$form.StartPosition = "CenterScreen"
+
+$joursLabel = New-Object System.Windows.Forms.Label
+$joursLabel.Location = New-Object System.Drawing.Point(20, 20)
+$joursLabel.Size = New-Object System.Drawing.Size(200, 20)
+$joursLabel.Text = "Nombre de jours sans modification :"
+$form.Controls.Add($joursLabel)
+
+$joursTextbox = New-Object System.Windows.Forms.TextBox
+$joursTextbox.Location = New-Object System.Drawing.Point(220, 20)
+$joursTextbox.Size = New-Object System.Drawing.Size(50, 20)
+$joursTextbox.MaxLength = 2
+$joursTextbox.Add_KeyPress({
+    if (-not [char]::IsDigit($_.KeyChar)) {
+        $_.Handled = $true
+    }
+})
+$form.Controls.Add($joursTextbox)
+
+$logTextbox = New-Object System.Windows.Forms.TextBox
+$logTextbox.Location = New-Object System.Drawing.Point(20, 60)
+$logTextbox.Size = New-Object System.Drawing.Size(360, 180)
+$logTextbox.Multiline = $true
+$logTextbox.ScrollBars = "Vertical"
+$logTextbox.ReadOnly = $true
+$form.Controls.Add($logTextbox)
+
+$exceptionLabel = New-Object System.Windows.Forms.Label
+$exceptionLabel.Location = New-Object System.Drawing.Point(20, 260)
+$exceptionLabel.Size = New-Object System.Drawing.Size(200, 20)
+$exceptionLabel.Text = "Exception de suppression :"
+$form.Controls.Add($exceptionLabel)
+
+$exceptionTextbox = New-Object System.Windows.Forms.TextBox
+$exceptionTextbox.Location = New-Object System.Drawing.Point(220, 260)
+$exceptionTextbox.Size = New-Object System.Drawing.Size(150, 20)
+$form.Controls.Add($exceptionTextbox)
+
+$cleanupButton = New-Object System.Windows.Forms.Button
+$cleanupButton.Location = New-Object System.Drawing.Point(150, 300)
+$cleanupButton.Size = New-Object System.Drawing.Size(100, 30)
+$cleanupButton.Text = "Nettoyer les sessions"
+$cleanupButton.Add_Click({
+    $jours = [int]$joursTextbox.Text
+    $seuil = (Get-Date).AddDays(-$jours)
+    $sessions = Get-PSSession
+
+    $success = $false
+    $count = 0
+
+    foreach ($session in $sessions) {
+        if ($session.Id -ne $null) {
+            if ($session.InstanceId -eq $null) {
+                $derniereModification = $session.DateChanged
+            } else {
+                $derniereModification = $session.InstanceId.DateChanged
+            }
+
+            if ($derniereModification -lt $seuil -and $session.ComputerName -ne $exceptionTextbox.Text) {
+                $logTextbox.AppendText("Suppression de la session $($session.Id)..." + [Environment]::NewLine)
+                Remove-PSSession $session
+                $logTextbox.AppendText("Session $($session.Id) supprimée." + [Environment]::NewLine)
+                $count += 1
+            }
+        }
+    }
+
+    if ($count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("Aucune session à supprimer pour la date spécifiée ou l'exception de suppression est active.", "Nettoyage de sessions")
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("Aucune session à supprimer pour la date spécifiée.", "Nettoyage de sessions")
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("Nettoyage de sessions terminé. $count sessions supprimées.", "Nettoyage de sessions")
+        $success = $true
+    }
+
+    if ($success -eq $true) {
+        $logTextbox.AppendText("Nettoyage de sessions terminé." + [Environment]::NewLine)
+    } else {
+        $logTextbox.AppendText("Nettoyage de sessions échoué." + [Environment]::NewLine)
+    }
+})
+$form.Controls.Add($cleanupButton)
+
+$form.ShowDialog() | Out-Null
